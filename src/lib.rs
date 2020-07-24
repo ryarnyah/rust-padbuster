@@ -1,10 +1,10 @@
-use log::{info, error};
+use log::{error, info};
 
 /// Errors which can occured in encrypt / decrypt
 #[derive(Debug)]
 pub enum PadbusterError {
     /// Occured when parameters are invalid.
-    ValidationError(& 'static str),
+    ValidationError(&'static str),
     /// Occured when oracle is unable to find a specific byte.
     UnableFindByteError(u8, Box<PadbusterError>),
     /// Occured when oracle is unable to decryt specific byte.
@@ -12,17 +12,25 @@ pub enum PadbusterError {
     /// Must occured in oracle function.
     BadPaddingError(Vec<u8>, String),
     /// Occured When error is not specified.
-    Unspecified(& 'static str)
+    Unspecified(&'static str),
 }
 
 impl std::fmt::Display for PadbusterError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             PadbusterError::ValidationError(ref s) => write!(f, "{}", s),
-            PadbusterError::UnableFindByteError(ref byte, ref origin) => write!(f, "Unable to find {} byte: {}", byte, origin),
-            PadbusterError::UnableDecryptByteError(ref block, ref max_retries) => write!(f, "Could not decrypt byte in {:?} within maximum allowed retries ({})", block, max_retries),
-            PadbusterError::BadPaddingError(ref ciphertext, ref origin) => write!(f, "Bad Padding for ciphertext {:?}: {}", ciphertext, origin),
-            PadbusterError::Unspecified(ref s) => write!(f, "Unexpected error occured: {}", s)
+            PadbusterError::UnableFindByteError(ref byte, ref origin) => {
+                write!(f, "Unable to find {} byte: {}", byte, origin)
+            }
+            PadbusterError::UnableDecryptByteError(ref block, ref max_retries) => write!(
+                f,
+                "Could not decrypt byte in {:?} within maximum allowed retries ({})",
+                block, max_retries
+            ),
+            PadbusterError::BadPaddingError(ref ciphertext, ref origin) => {
+                write!(f, "Bad Padding for ciphertext {:?}: {}", ciphertext, origin)
+            }
+            PadbusterError::Unspecified(ref s) => write!(f, "Unexpected error occured: {}", s),
         }
     }
 }
@@ -43,9 +51,11 @@ impl PaddingOracle {
     /// * `max_retries` - Maximal number of retries if it had an error.
     /// * `oracle` - Oracle function must return `PadbusterError::BadPaddingError` in case of padding error.
     ///
-    pub fn new(block_size: u8,
-               max_retries: u8,
-               oracle: fn(Vec<u8>) -> Result<(), PadbusterError>) -> Self {
+    pub fn new(
+        block_size: u8,
+        max_retries: u8,
+        oracle: fn(Vec<u8>) -> Result<(), PadbusterError>,
+    ) -> Self {
         PaddingOracle {
             oracle,
             block_size,
@@ -60,26 +70,29 @@ impl PaddingOracle {
     /// * `plaintext` - Plaintext to use.
     /// * `iv` - IV to use if known empty Vec<u8> if not.
     ///
-    pub fn encrypt(&self, plaintext: &Vec<u8>, iv: &Vec<u8>) -> Result<Vec<u8>, PadbusterError> {
+    pub fn encrypt(&self, plaintext: &[u8], iv: &[u8]) -> Result<Vec<u8>, PadbusterError> {
         info!("Starting Encrypt Mode");
 
-        if plaintext.len() == 0 {
-            return Err(PadbusterError::ValidationError("Cannot encrypt empty plaintext"));
+        if plaintext.is_empty() {
+            return Err(PadbusterError::ValidationError(
+                "Cannot encrypt empty plaintext",
+            ));
         }
-        let mut pad = ((self.block_size as usize) - (plaintext.len() % (self.block_size as usize))) % (self.block_size as usize);
+        let mut pad = ((self.block_size as usize) - (plaintext.len() % (self.block_size as usize)))
+            % (self.block_size as usize);
         if pad == 0 {
             pad = self.block_size as usize;
         }
-        let mut used_iv = iv.clone();
-        let mut ptext = plaintext.clone();
+        let mut used_iv = iv.to_owned();
+        let mut ptext = plaintext.to_owned();
         let mut padding = vec![pad as u8; pad];
         ptext.append(&mut padding);
 
         info!("Attempting to encrypt {:?} bytes", ptext);
-        if used_iv.len() == 0 {
+        if used_iv.is_empty() {
             used_iv = vec![0u8; self.block_size as usize];
         }
-        let mut encrypted = used_iv.clone();
+        let mut encrypted = used_iv;
         let mut block = encrypted.clone();
 
         let mut n = ptext.len();
@@ -91,28 +104,35 @@ impl PaddingOracle {
             };
             let current_intermediate_bytes = intermediate_bytes.clone();
 
-            block = xor_data(intermediate_bytes, ptext[(n - (self.block_size as usize))..n].to_vec());
+            block = xor_data(
+                intermediate_bytes,
+                ptext[(n - (self.block_size as usize))..n].to_vec(),
+            );
             let current_block = block.clone();
 
             let mut current_encrypted = encrypted.clone();
             encrypted = block.clone();
             encrypted.append(&mut current_encrypted);
 
-            info!("Block {} Results:
+            info!(
+                "Block {} Results:
             [+] New Cipher Text (HEX): {}
             [+] Intermediate Bytes (HEX): {}",
-                  n / (self.block_size as usize),
-                  hex::encode(current_block),
-                  hex::encode(current_intermediate_bytes)
+                n / (self.block_size as usize),
+                hex::encode(current_block),
+                hex::encode(current_intermediate_bytes)
             );
 
             n -= self.block_size as usize;
         }
 
-        info!("*** Finished ***
-        [+] Encrypted value is: {}", base64::encode(&encrypted));
+        info!(
+            "*** Finished ***
+        [+] Encrypted value is: {}",
+            base64::encode(&encrypted)
+        );
 
-        return Ok(encrypted);
+        Ok(encrypted)
     }
 
     /// Decrypt the given ciphertext & iv using oracle
@@ -122,21 +142,25 @@ impl PaddingOracle {
     /// * `ciphertext` - Ciphertext to use.
     /// * `iv` - IV to use if known empty Vec<u8> if not.
     ///
-    pub fn decrypt(&self, ciphertext: &Vec<u8>, iv: &Vec<u8>) -> Result<Vec<u8>, PadbusterError> {
+    pub fn decrypt(&self, ciphertext: &[u8], iv: &[u8]) -> Result<Vec<u8>, PadbusterError> {
         info!("Starting Decrypt Mode");
         info!("Attempting to decrypt {:?} bytes", ciphertext);
 
         if ciphertext.len() % (self.block_size as usize) != 0 {
-            return Err(PadbusterError::ValidationError("Ciphertext not of block size"));
+            return Err(PadbusterError::ValidationError(
+                "Ciphertext not of block size",
+            ));
         }
 
-        if iv.len() == 0 && ciphertext.len() < (self.block_size as usize) * 2 {
-            return Err(PadbusterError::ValidationError("Ciphertext not at least 2 * block size"));
+        if iv.is_empty() && ciphertext.len() < (self.block_size as usize) * 2 {
+            return Err(PadbusterError::ValidationError(
+                "Ciphertext not at least 2 * block size",
+            ));
         }
 
-        let mut used_iv = iv.clone();
-        let mut ctext = ciphertext.clone();
-        if iv.len() == 0 {
+        let mut used_iv = iv.to_owned();
+        let mut ctext = ciphertext.to_owned();
+        if iv.is_empty() {
             used_iv = ciphertext[..(self.block_size as usize)].to_vec();
             ctext = ciphertext[(self.block_size as usize)..].to_vec();
         }
@@ -144,8 +168,8 @@ impl PaddingOracle {
         let mut decrypted = vec![0u8; ctext.len()];
 
         let mut n = 0;
-        while ctext.len() > 0 {
-            info!("*** Starting Block {} ***\n", n/self.block_size);
+        while !ctext.is_empty() {
+            info!("*** Starting Block {} ***\n", n / self.block_size);
             let mut block = ctext[0..(self.block_size as usize)].to_vec();
             ctext = ctext[(self.block_size as usize)..].to_vec();
             let next_iv = block.clone();
@@ -165,24 +189,26 @@ impl PaddingOracle {
             used_iv = next_iv;
             n += self.block_size;
 
-            info!("Block {} Results:
+            info!(
+                "Block {} Results:
             [+] New Cipher Text (HEX): {}
             [+] Intermediate Bytes (HEX): {}
             [+] Plain Text: {}",
-                  n / self.block_size,
-                  hex::encode(current_block),
-                  hex::encode(current_intermediate_bytes),
-                  std::str::from_utf8(&current_decrypted_block).unwrap()
+                n / self.block_size,
+                hex::encode(current_block),
+                hex::encode(current_intermediate_bytes),
+                std::str::from_utf8(&current_decrypted_block).unwrap()
             );
         }
 
-        info!("*** Finished ***
+        info!(
+            "*** Finished ***
         [+] Decrypted value (ASCII): {}
         [+] Decrypted value (HEX): {}
         [+] Decrypted value (Base64): {}",
-              std::str::from_utf8(&decrypted).unwrap(),
-              hex::encode(&decrypted),
-              base64::encode(&decrypted)
+            std::str::from_utf8(&decrypted).unwrap(),
+            hex::encode(&decrypted),
+            base64::encode(&decrypted)
         );
 
         Ok(decrypted)
@@ -195,7 +221,6 @@ impl PaddingOracle {
 
         let mut byte_num = self.block_size;
         while byte_num > 0 {
-
             let mut try_number = 0;
             let mut r = 255u8;
             let mut i = r as i16;
@@ -206,23 +231,20 @@ impl PaddingOracle {
                 r -= 1;
 
                 // If a padding oracle could not be identified from the
-			          // response, this indicates the padding bytes we sent
-			          // were correct.
+                // response, this indicates the padding bytes we sent
+                // were correct.
                 let oracle_test_bytes = test_bytes.clone();
                 try_number += 1;
-                match (self.oracle)(oracle_test_bytes) {
-                    Err(e) => {
-                        if r == 0 {
-                            return Err(PadbusterError::UnableFindByteError(byte_num, Box::new(e)));
-                        }
-                        if let PadbusterError::BadPaddingError(_, _) = e {
-                            i -= 1;
-                            continue;
-                        }
-                        error!("{}", e);
-                        return Err(e);
-                    },
-                    Ok(_) => {}
+                if let Err(e) = (self.oracle)(oracle_test_bytes) {
+                    if r == 0 {
+                        return Err(PadbusterError::UnableFindByteError(byte_num, Box::new(e)));
+                    }
+                    if let PadbusterError::BadPaddingError(_, _) = e {
+                        i -= 1;
+                        continue;
+                    }
+                    error!("{}", e);
+                    return Err(e);
                 }
 
                 let current_pad_byte = (self.block_size - (byte_num - 1)) as u8;
@@ -234,10 +256,10 @@ impl PaddingOracle {
                 let mut k = byte_num - 1;
                 while k < self.block_size {
                     // XOR the current test byte with the padding value
-				            // for this round to recover the decrypted byte
+                    // for this round to recover the decrypted byte
                     test_bytes[k as usize] ^= current_pad_byte;
                     // XOR it again with the padding byte for the
-				            // next round
+                    // next round
                     test_bytes[k as usize] ^= next_pad_byte;
 
                     k += 1;
@@ -259,11 +281,17 @@ impl PaddingOracle {
             match self.try_bust(block) {
                 Ok(r) => return Ok(r),
                 Err(e) => {
-                    error!("[+] Retrying {}/{} unable to bust block {:?} {}", retry, self.max_retries, block, e);
+                    error!(
+                        "[+] Retrying {}/{} unable to bust block {:?} {}",
+                        retry, self.max_retries, block, e
+                    );
                 }
             };
         }
-        Err(PadbusterError::UnableDecryptByteError(block.to_vec(), self.max_retries))
+        Err(PadbusterError::UnableDecryptByteError(
+            block.to_vec(),
+            self.max_retries,
+        ))
     }
 }
 
@@ -281,8 +309,8 @@ mod tests {
     use super::*;
 
     use aes::Aes128;
-    use block_modes::{BlockMode, Cbc};
     use block_modes::block_padding::Pkcs7;
+    use block_modes::{BlockMode, Cbc};
     use hex_literal::hex;
 
     extern crate simple_logger;
@@ -293,7 +321,7 @@ mod tests {
         if block_size == 0 {
             return Err("Invalid block size");
         }
-        if b.len() == 0 {
+        if b.is_empty() {
             return Err("Invalid PKCS7 data");
         }
         if b.len() % block_size != 0 {
@@ -308,7 +336,7 @@ mod tests {
                 return Err("Invalid PKCS7 padding");
             }
         }
-        return Ok(b[..(b.len() - (c as usize))].to_vec())
+        Ok(b[..(b.len() - (c as usize))].to_vec())
     }
 
     fn oracle_fn(data: Vec<u8>) -> Result<(), PadbusterError> {
@@ -320,9 +348,10 @@ mod tests {
         let mut buf = ciphertext.to_vec();
         match cipher.decrypt(&mut buf) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                Err(PadbusterError::BadPaddingError(ciphertext.to_vec(), format!("{}", e)))
-            }
+            Err(e) => Err(PadbusterError::BadPaddingError(
+                ciphertext.to_vec(),
+                format!("{}", e),
+            )),
         }
     }
 
@@ -331,14 +360,17 @@ mod tests {
         let _ = simple_logger::init_with_level(log::Level::Info);
 
         let plaintext = b"Hello world!Hello world!";
-        let current_plaintext = plaintext.clone();
+        let current_plaintext = *plaintext;
         let oracle = PaddingOracle::new(16, 1, oracle_fn);
 
         let iv: Vec<u8> = [].to_vec();
 
         let ciphertext = oracle.encrypt(&plaintext.to_vec(), &iv).unwrap();
         let plaintext = oracle.decrypt(&ciphertext, &iv).unwrap();
-        assert_eq!(current_plaintext.to_vec(), unpad(plaintext[32..].to_vec(), 16).unwrap());
+        assert_eq!(
+            current_plaintext.to_vec(),
+            unpad(plaintext[32..].to_vec(), 16).unwrap()
+        );
     }
 
     #[test]
