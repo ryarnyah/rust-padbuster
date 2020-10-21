@@ -357,7 +357,9 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let _ = simple_logger::init_with_level(log::Level::Info);
+        let _ = simple_logger::SimpleLogger::new()
+            .with_level(log::Level::Info.to_level_filter())
+            .init();
 
         let plaintext = b"Hello world!Hello world!";
         let current_plaintext = *plaintext;
@@ -375,7 +377,9 @@ mod tests {
 
     #[test]
     fn test_decrypt() {
-        let _ = simple_logger::init_with_level(log::Level::Info);
+        let _ = simple_logger::SimpleLogger::new()
+            .with_level(log::Level::Info.to_level_filter())
+            .init();
 
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
