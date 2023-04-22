@@ -247,7 +247,7 @@ impl PaddingOracle {
                     return Err(e);
                 }
 
-                let current_pad_byte = (self.block_size - (byte_num - 1)) as u8;
+                let current_pad_byte = self.block_size - (byte_num - 1);
                 let next_pad_byte = self.block_size - (byte_num - 1) + 1;
                 let decrypted_byte = test_bytes[(byte_num - 1) as usize] ^ current_pad_byte;
 
