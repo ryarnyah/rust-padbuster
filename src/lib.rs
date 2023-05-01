@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine};
 use log::{error, info};
 
 /// Errors which can occured in encrypt / decrypt
@@ -129,7 +130,7 @@ impl PaddingOracle {
         info!(
             "*** Finished ***
         [+] Encrypted value is: {}",
-            base64::encode(&encrypted)
+            general_purpose::STANDARD.encode(&encrypted)
         );
 
         Ok(encrypted)
@@ -208,7 +209,7 @@ impl PaddingOracle {
         [+] Decrypted value (Base64): {}",
             std::str::from_utf8(&decrypted).unwrap(),
             hex::encode(&decrypted),
-            base64::encode(&decrypted)
+            general_purpose::STANDARD.encode(&decrypted)
         );
 
         Ok(decrypted)
@@ -308,14 +309,14 @@ fn xor_data(data: Vec<u8>, key: Vec<u8>) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    use aes::Aes128;
-    use block_modes::block_padding::Pkcs7;
-    use block_modes::{BlockMode, Cbc};
+    //use aes::cipher::{BlockMode, Cbc};
+    use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
     use hex_literal::hex;
 
     extern crate simple_logger;
 
-    type Aes128Cbc = Cbc<Aes128, Pkcs7>;
+    type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
+    type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
     fn unpad(b: Vec<u8>, block_size: usize) -> Result<Vec<u8>, &'static str> {
         if block_size == 0 {
@@ -344,9 +345,8 @@ mod tests {
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = &data[..16];
         let ciphertext = &data[16..];
-        let cipher = Aes128Cbc::new_var(&key, &iv).unwrap();
         let mut buf = ciphertext.to_vec();
-        match cipher.decrypt(&mut buf) {
+        match Aes128CbcDec::new(&key.into(), iv.into()).decrypt_padded_mut::<Pkcs7>(&mut buf) {
             Ok(_) => Ok(()),
             Err(e) => Err(PadbusterError::BadPaddingError(
                 ciphertext.to_vec(),
@@ -384,13 +384,15 @@ mod tests {
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
         let plaintext = b"Hello world!Hello world!";
-        let cipher = Aes128Cbc::new_var(&key, &iv).unwrap();
         // buffer must have enough space for message+padding
         let mut buffer = vec![0u8; plaintext.len() + (16 - plaintext.len() % 16) % 16];
         // copy message to the buffer
         let pos = plaintext.len();
         buffer[..pos].copy_from_slice(plaintext);
-        let ciphertext = cipher.encrypt(&mut buffer, pos).unwrap();
+        let ciphertext = Aes128CbcEnc::new(&key.into(), &iv.into())
+            .encrypt_padded_mut::<Pkcs7>(&mut buffer, pos)
+            .unwrap();
+
         let mut to_decrypt = iv.to_vec();
         to_decrypt.append(&mut ciphertext.to_vec());
 
@@ -415,20 +417,22 @@ mod tests {
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
         let plaintext = b"Hello world!";
-        let cipher = Aes128Cbc::new_var(&key, &iv).unwrap();
         // buffer must have enough space for message+padding
         let mut buffer = vec![0u8; plaintext.len() + (16 - plaintext.len() % 16) % 16];
         // copy message to the buffer
         let pos = plaintext.len();
         buffer[..pos].copy_from_slice(plaintext);
-        let ciphertext = cipher.encrypt(&mut buffer, pos).unwrap();
+        let ciphertext = Aes128CbcEnc::new(&key.into(), &iv.into())
+            .encrypt_padded_mut::<Pkcs7>(&mut buffer, pos)
+            .unwrap();
 
         assert_eq!(ciphertext, hex!("1b7a4c403124ae2fb52bedc534d82fa8"));
 
         // re-create cipher mode instance
-        let cipher = Aes128Cbc::new_var(&key, &iv).unwrap();
         let mut buf = ciphertext.to_vec();
-        let decrypted_ciphertext = cipher.decrypt(&mut buf).unwrap();
+        let decrypted_ciphertext = Aes128CbcDec::new(&key.into(), &iv.into())
+            .decrypt_padded_mut::<Pkcs7>(&mut buf)
+            .unwrap();
 
         assert_eq!(decrypted_ciphertext, plaintext);
     }
