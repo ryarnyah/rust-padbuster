@@ -112,7 +112,7 @@ impl PaddingOracle {
             let current_block = block.clone();
 
             let mut current_encrypted = encrypted.clone();
-            encrypted = block.clone();
+            encrypted.clone_from(&block);
             encrypted.append(&mut current_encrypted);
 
             info!(
@@ -309,7 +309,6 @@ fn xor_data(data: Vec<u8>, key: Vec<u8>) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    //use aes::cipher::{BlockMode, Cbc};
     use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
     use hex_literal::hex;
 
