@@ -99,10 +99,7 @@ impl PaddingOracle {
         let mut n = ptext.len();
         while n > 0 {
             info!("*** Starting Block {} ***", n / (self.block_size as usize));
-            let intermediate_bytes = match self.bust(&mut block) {
-                Err(e) => return Err(e),
-                Ok(r) => r,
-            };
+            let intermediate_bytes = self.bust(&mut block)?;
             let current_intermediate_bytes = intermediate_bytes.clone();
 
             block = xor_data(
@@ -177,10 +174,7 @@ impl PaddingOracle {
 
             let current_block = block.clone();
 
-            let intermediate_bytes = match self.bust(&mut block) {
-                Err(e) => return Err(e),
-                Ok(r) => r,
-            };
+            let intermediate_bytes = self.bust(&mut block)?;
             let current_intermediate_bytes = intermediate_bytes.clone();
 
             let mut decrypted_block = xor_data(intermediate_bytes, used_iv);
