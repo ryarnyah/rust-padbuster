@@ -2,7 +2,7 @@
 name = "rust-padbuster"
 version = "0.0.0"
 authors = ["Ryar Nyah <ryarnyah@gmail.com>"]
-edition = "2021"
+edition = "2024"
 license-file = "LICENSE"
 readme = "README.md"
 description = "It's a port of python-paddingoracle (https://github.com/mwielgoszewski/python-paddingoracle)"

@@ -19,19 +19,18 @@ pub enum PadbusterError {
 impl std::fmt::Display for PadbusterError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
-            PadbusterError::ValidationError(ref s) => write!(f, "{}", s),
+            PadbusterError::ValidationError(ref s) => write!(f, "{s}"),
             PadbusterError::UnableFindByteError(ref byte, ref origin) => {
-                write!(f, "Unable to find {} byte: {}", byte, origin)
+                write!(f, "Unable to find {byte} byte: {origin}")
             }
             PadbusterError::UnableDecryptByteError(ref block, ref max_retries) => write!(
                 f,
-                "Could not decrypt byte in {:?} within maximum allowed retries ({})",
-                block, max_retries
+                "Could not decrypt byte in {block:?} within maximum allowed retries ({max_retries})"
             ),
             PadbusterError::BadPaddingError(ref ciphertext, ref origin) => {
-                write!(f, "Bad Padding for ciphertext {:?}: {}", ciphertext, origin)
+                write!(f, "Bad Padding for ciphertext {ciphertext:?}: {origin}")
             }
-            PadbusterError::Unspecified(ref s) => write!(f, "Unexpected error occured: {}", s),
+            PadbusterError::Unspecified(ref s) => write!(f, "Unexpected error occured: {s}"),
         }
     }
 }
@@ -89,7 +88,7 @@ impl PaddingOracle {
         let mut padding = vec![pad as u8; pad];
         ptext.append(&mut padding);
 
-        info!("Attempting to encrypt {:?} bytes", ptext);
+        info!("Attempting to encrypt {ptext:?} bytes");
         if used_iv.is_empty() {
             used_iv = vec![0u8; self.block_size as usize];
         }
@@ -142,7 +141,7 @@ impl PaddingOracle {
     ///
     pub fn decrypt(&self, ciphertext: &[u8], iv: &[u8]) -> Result<Vec<u8>, PadbusterError> {
         info!("Starting Decrypt Mode");
-        info!("Attempting to decrypt {:?} bytes", ciphertext);
+        info!("Attempting to decrypt {ciphertext:?} bytes");
 
         if ciphertext.len() % (self.block_size as usize) != 0 {
             return Err(PadbusterError::ValidationError(
@@ -238,7 +237,7 @@ impl PaddingOracle {
                         i -= 1;
                         continue;
                     }
-                    error!("{}", e);
+                    error!("{e}");
                     return Err(e);
                 }
 
@@ -259,7 +258,7 @@ impl PaddingOracle {
 
                     k += 1;
                 }
-                info!("[+] Success: ({}/256) [Byte {}]", try_number, byte_num);
+                info!("[+] Success: ({try_number}/256) [Byte {byte_num}]");
                 break;
             }
 
@@ -270,7 +269,7 @@ impl PaddingOracle {
     }
 
     fn bust(&self, block: &mut Vec<u8>) -> Result<Vec<u8>, PadbusterError> {
-        info!("Processing block {:?}", block);
+        info!("Processing block {block:?}");
 
         for retry in 0..self.max_retries {
             match self.try_bust(block) {
