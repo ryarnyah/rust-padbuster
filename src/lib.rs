@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use log::{error, info};
 
 /// Errors which can occured in encrypt / decrypt
@@ -143,7 +143,7 @@ impl PaddingOracle {
         info!("Starting Decrypt Mode");
         info!("Attempting to decrypt {ciphertext:?} bytes");
 
-        if ciphertext.len() % (self.block_size as usize) != 0 {
+        if !ciphertext.len().is_multiple_of(self.block_size as usize) {
             return Err(PadbusterError::ValidationError(
                 "Ciphertext not of block size",
             ));
@@ -302,7 +302,7 @@ fn xor_data(data: Vec<u8>, key: Vec<u8>) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+    use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
     use hex_literal::hex;
 
     extern crate simple_logger;
